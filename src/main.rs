@@ -10,19 +10,16 @@ const WINDOW_SIZE: Size = Size::new(600f32, 600f32);
 fn main() {
     match iced::application(
         WINDOW_TITLE,
-        Renderer::update,
-        Renderer::view
+        Application::update,
+        Application::view
     ).window_size(WINDOW_SIZE).centered().run() {
         Ok(_) => {},
         Err(e) => println!("Couldn't create application wind")
     };
 }
 
-struct Renderer { // the iced state
-
-}
-
-impl Renderer {
+struct Application {  } // the iced state
+impl Application {
     fn new() -> Self {
         let mut res = Self { };
         res.init(); // init in new?
@@ -38,11 +35,17 @@ impl Renderer {
     }
 
     fn view(&self) -> Element<Message> { // returns message based on button press, ...
-        Canvas::new(self).width(Fill).height(Fill).into()
+        Canvas::new(CanvasRenderer{}).width(Fill).height(Fill).into()
     }
 }
-impl canvas::Program<Message> for Renderer { // could be separated for canvas
-    type State = Self;
+
+impl Default for Application { // state auto created by iced
+    fn default() -> Self { Application::new() }
+}
+
+struct CanvasRenderer {}
+impl canvas::Program<Message> for CanvasRenderer {
+    type State = Application;
 
     fn draw(&self, state: &Self::State, renderer: &iced::Renderer, theme: &Theme, bounds: Rectangle, cursor: Cursor) -> Vec<Geometry<iced::Renderer>> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
@@ -51,9 +54,6 @@ impl canvas::Program<Message> for Renderer { // could be separated for canvas
 
         vec![frame.into_geometry()]
     }
-}
-impl Default for Renderer { // state auto created by iced
-    fn default() -> Self { Renderer::new() }
 }
 
 #[derive(Debug,Clone)]
