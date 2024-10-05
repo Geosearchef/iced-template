@@ -1,39 +1,61 @@
 mod util;
+mod image;
 
+use std::time::Duration;
+use chrono::{DateTime, Local};
 use crate::util::load_image;
 use iced::mouse::Cursor;
 use iced::widget::canvas::{Geometry, Image};
 use iced::widget::{canvas, Canvas};
-use iced::{Color, Element, Fill, Point, Rectangle, Size, Theme};
+use iced::{time, Color, Element, Fill, Point, Rectangle, Size, Subscription, Theme};
+use crate::image::DynamicImage;
 
 const WINDOW_TITLE: &str = "Render";
 const WINDOW_SIZE: Size = Size::new(600f32, 600f32);
+const TARGET_FRAME_RATE: u64 = 60;
+const TARGET_FRAME_TIME_MILLIS: u64 = 1_000u64 / TARGET_FRAME_RATE;
 
 fn main() {
-    match iced::application(
-        WINDOW_TITLE,
-        Application::update,
-        Application::view
-    ).window_size(WINDOW_SIZE).centered().run() {
-        Ok(_) => {},
-        Err(e) => println!("Couldn't create application wind")
-    };
+    // tracing_subscriber::fmt::init();
+
+    match iced::application(WINDOW_TITLE, Application::update, Application::view)
+        .subscription(Application::subscription)
+        .window_size(WINDOW_SIZE)
+        .centered()
+        .antialiasing(true)
+        .run() { // TODO: template
+            Ok(_) => {},
+            Err(e) => println!("Couldn't create application wind")
+        };
 }
 
-struct Application {  } // the iced state
+struct Application {
+    frame_buffer: DynamicImage,
+    last_update: i64
+} // the iced state
 impl Application {
     fn new() -> Self {
-        let mut res = Self { };
-        res.init(); // init in new?
-        res
+        Self {
+            frame_buffer: DynamicImage::new(WINDOW_SIZE.width as u32, WINDOW_SIZE.height as u32), //TODO: template
+            last_update: Local::now().timestamp_millis()
+        }
     }
 
-    fn init(&mut self) {
-        println!("Initializing renderer");
+    fn subscription(&self) -> Subscription<Message> { // produces a message without time every frame
+        time::every(Duration::from_millis(TARGET_FRAME_TIME_MILLIS))
+            .map(|_| Message::Tick(Local::now()))
     }
 
     fn update(&mut self, message: Message) { // message is action from view (=render)
+        match message {
+            Message::Tick(time) => {
+                println!("update at {}", time.timestamp_millis());
 
+                let delta = time.timestamp_millis() - self.last_update;
+                self.last_update += delta;
+
+            }
+        };
     }
 
     fn view(&self) -> Element<Message> { // returns message based on button press, ...
@@ -57,6 +79,8 @@ impl canvas::Program<Message> for CanvasRenderer {
         frame.draw_image(Rectangle::new(Point::new(100f32, 100f32), Size::new(100f32, 100f32)), self.image.clone());
         frame.fill_rectangle(Point::new(150f32, 250f32), Size::new(100f32, 100f32), Color::new(0.0f32, 0.5f32, 0.0f32, 1.0f32));
 
+        println!("repaint");
+
         vec![frame.into_geometry()]
     }
 }
@@ -70,5 +94,5 @@ impl CanvasRenderer {
 
 #[derive(Debug,Clone)]
 enum Message {
-    None
+    Tick(DateTime<Local>)
 }
