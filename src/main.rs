@@ -1,14 +1,15 @@
 mod util;
 mod image;
 
-use std::time::Duration;
-use chrono::{DateTime, Local};
-use crate::util::load_image;
-use iced::mouse::Cursor;
-use iced::widget::canvas::{Geometry, Image};
-use iced::widget::{canvas, Canvas};
-use iced::{time, Color, Element, Fill, Point, Rectangle, Size, Subscription, Theme};
+use std::ops::Deref;
 use crate::image::DynamicImage;
+use chrono::{DateTime, Local};
+use iced::mouse::Cursor;
+use iced::widget::canvas::{Event, Geometry};
+use iced::widget::{canvas, Canvas};
+use iced::{application, time, Element, Fill, Rectangle, Size, Subscription, Theme};
+use std::time::Duration;
+use iced::event::Status;
 
 const WINDOW_TITLE: &str = "Render";
 const WINDOW_SIZE: Size = Size::new(600f32, 600f32);
@@ -16,14 +17,14 @@ const TARGET_FRAME_RATE: u64 = 60;
 const TARGET_FRAME_TIME_MILLIS: u64 = 1_000u64 / TARGET_FRAME_RATE;
 
 fn main() {
-    // tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt::init();
 
     match iced::application(WINDOW_TITLE, Application::update, Application::view)
         .subscription(Application::subscription)
         .window_size(WINDOW_SIZE)
         .centered()
         .antialiasing(true)
-        .run() { // TODO: template
+        .run() {
             Ok(_) => {},
             Err(e) => println!("Couldn't create application wind")
         };
@@ -36,7 +37,7 @@ struct Application {
 impl Application {
     fn new() -> Self {
         Self {
-            frame_buffer: DynamicImage::new(WINDOW_SIZE.width as u32, WINDOW_SIZE.height as u32), //TODO: template
+            frame_buffer: DynamicImage::new(WINDOW_SIZE.width as u32, WINDOW_SIZE.height as u32),
             last_update: Local::now().timestamp_millis()
         }
     }
@@ -49,17 +50,25 @@ impl Application {
     fn update(&mut self, message: Message) { // message is action from view (=render)
         match message {
             Message::Tick(time) => {
-                println!("update at {}", time.timestamp_millis());
-
                 let delta = time.timestamp_millis() - self.last_update;
                 self.last_update += delta;
-
+                
+                // This is expensive
+                let start = Local::now().timestamp_millis();
+                for y in 0..self.frame_buffer.height {
+                    for x in 0..self.frame_buffer.width {
+                        self.frame_buffer.set_rgba(x, y, (0u8, (time.timestamp_millis() / 5 % 255) as u8, 0u8, 255u8));
+                    }
+                }
+                println!("Took {} ms", Local::now().timestamp_millis() - start);
             }
         };
+
+
     }
 
     fn view(&self) -> Element<Message> { // returns message based on button press, ...
-        Canvas::new(CanvasRenderer::new()).width(Fill).height(Fill).into()
+        Canvas::new(CanvasRenderer::new(self)).width(Fill).height(Fill).into()
     }
 }
 
@@ -67,27 +76,33 @@ impl Default for Application { // state auto created by iced
     fn default() -> Self { Application::new() }
 }
 
-struct CanvasRenderer {
-    image: Image
+struct CanvasRenderer<'a> {
+    application: &'a Application
+    // image: Image
 }
-impl canvas::Program<Message> for CanvasRenderer {
-    type State = Application;
+impl<'a> canvas::Program<Message> for CanvasRenderer<'a> {
+    type State = ();
 
-    fn draw(&self, state: &Self::State, renderer: &iced::Renderer, theme: &Theme, bounds: Rectangle, cursor: Cursor) -> Vec<Geometry<iced::Renderer>> {
+    fn update(&self, _state: &mut Self::State, _event: Event, _bounds: Rectangle, _cursor: Cursor) -> (Status, Option<Message>) {
+        (Status::Captured, None)
+    }
+
+    fn draw(&self, _: &Self::State, renderer: &iced::Renderer, theme: &Theme, bounds: Rectangle, cursor: Cursor) -> Vec<Geometry<iced::Renderer>> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
-        frame.draw_image(Rectangle::new(Point::new(100f32, 100f32), Size::new(100f32, 100f32)), self.image.clone());
-        frame.fill_rectangle(Point::new(150f32, 250f32), Size::new(100f32, 100f32), Color::new(0.0f32, 0.5f32, 0.0f32, 1.0f32));
-
-        println!("repaint");
+        frame.draw_image(bounds, self.application.frame_buffer.to_iced_image()); // clones the frame buffer
+        println!("{:?}", self.application.frame_buffer.get_rgba(10, 10));
 
         vec![frame.into_geometry()]
     }
+
+
 }
-impl CanvasRenderer {
-    fn new() -> Self {
-        CanvasRenderer {
-            image: load_image("logo.png")
+impl<'a> CanvasRenderer<'a> {
+    fn new(application: &'a Application) -> Self {
+        Self {
+            application
+            // image: load_image("logo.png")
         }
     }
 }
@@ -96,3 +111,4 @@ impl CanvasRenderer {
 enum Message {
     Tick(DateTime<Local>)
 }
+
